@@ -1,9 +1,10 @@
 package cas
 
 import (
-	"github.com/vmware/terraform-provider-cas/sdk"
+	tango "github.com/vmware/terraform-provider-cas/sdk"
 
 	"github.com/hashicorp/terraform/helper/schema"
+	"github.com/vmware/cas-sdk-go/pkg/models"
 )
 
 // nicsSchema returns the schema to use for the nics property
@@ -98,6 +99,56 @@ func expandNics(configNics []interface{}) []tango.Nic {
 		nic.CustomProperties = expandCustomProperties(nicMap["custom_properties"].(map[string]interface{}))
 
 		nics = append(nics, nic)
+	}
+
+	return nics
+}
+
+func expandSDKNics(configNics []interface{}) []*models.NetworkInterfaceSpecification {
+	nics := make([]*models.NetworkInterfaceSpecification, 0, len(configNics))
+
+	for _, configNic := range configNics {
+		nicMap := configNic.(map[string]interface{})
+
+		nic := models.NetworkInterfaceSpecification{
+			NetworkID: withString(nicMap["network_id"].(string)),
+		}
+
+		if v, ok := nicMap["name"].(string); ok && v != "" {
+			nic.Name = &v
+		}
+
+		if v, ok := nicMap["description"].(string); ok && v != "" {
+			nic.Description = v
+		}
+
+		if v, ok := nicMap["device_index"].(int); ok && v != 0 {
+			nic.DeviceIndex = int32(v)
+		}
+
+		if v, ok := nicMap["addresses"].([]interface{}); ok && len(v) != 0 {
+			addresses := make([]string, 0)
+
+			for _, value := range v {
+				addresses = append(addresses, value.(string))
+			}
+
+			nic.Addresses = addresses
+		}
+
+		if v, ok := nicMap["security_group_ids"].([]interface{}); ok && len(v) != 0 {
+			securityGroupIds := make([]string, 0)
+
+			for _, value := range v {
+				securityGroupIds = append(securityGroupIds, value.(string))
+			}
+
+			nic.SecurityGroupIds = securityGroupIds
+		}
+
+		nic.CustomProperties = expandCustomProperties(nicMap["custom_properties"].(map[string]interface{}))
+
+		nics = append(nics, &nic)
 	}
 
 	return nics

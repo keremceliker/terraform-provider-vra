@@ -2,22 +2,23 @@ package cas
 
 import (
 	"fmt"
-	"github.com/vmware/terraform-provider-cas/sdk"
 	"regexp"
 	"strconv"
-	"strings"
 	"testing"
+
+	tango "github.com/vmware/terraform-provider-cas/sdk"
 
 	"github.com/hashicorp/terraform/helper/acctest"
 	"github.com/hashicorp/terraform/helper/resource"
 	"github.com/hashicorp/terraform/terraform"
+	"github.com/vmware/cas-sdk-go/pkg/client/compute"
 )
 
 func TestAccTangoMachine_Basic(t *testing.T) {
 	rInt := acctest.RandInt()
 
 	resource.Test(t, resource.TestCase{
-		PreCheck:     func() { testAccPreCheck(t) },
+		PreCheck:     func() { testAccPreCheckAWS(t) },
 		Providers:    testAccProviders,
 		CheckDestroy: testAccCheckTangoMachineDestroy,
 		Steps: []resource.TestStep{
@@ -59,29 +60,32 @@ func testAccCheckTangoMachineExists(n string) resource.TestCheckFunc {
 }
 
 func testAccCheckTangoMachineDestroy(s *terraform.State) error {
-	client := testAccProvider.Meta().(*tango.Client)
+	client := testAccProviderCAS.Meta().(*tango.Client)
+	apiClient := client.GetAPIClient()
 
 	for _, rs := range s.RootModule().Resources {
 		if rs.Type != "cas_machine" {
 			continue
 		}
 
-		_, err := client.ReadResource("/iaas/machines/" + rs.Primary.ID)
-
-		if err != nil && !strings.Contains(err.Error(), "404") {
-			return fmt.Errorf(
-				"error waiting for machine (%s) to be destroyed: %s",
-				rs.Primary.ID, err)
+		_, err := apiClient.Compute.GetMachine(compute.NewGetMachineParams().WithID(rs.Primary.ID))
+		_, ok := err.(*compute.GetMachineNotFound)
+		if err != nil && !ok {
+			return fmt.Errorf("error waiting for machine (%s) to be destroyed: %s", rs.Primary.ID, err)
 		}
 	}
-
 	return nil
 }
 
 func testAccCheckTangoMachineConfig(rInt int) string {
 	return fmt.Sprintf(`
+data "cas_project" "test_project" {
+	name = "test-project"
+}
+
 resource "cas_machine" "my_machine" {
-  name = "terraform_cas_machine-%d"
+	name = "terraform_cas_machine-%d"
+	project_id = "${data.cas_project.test_project.id}"
   image = "ubuntu"
   flavor = "small"
 
